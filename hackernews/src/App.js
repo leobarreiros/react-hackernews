@@ -21,9 +21,13 @@ const list = [
 ];
 
 const DEFAULT_QUERY = 'redux';
+const DEFAULT_HPP = 8;
+
 const PATH_BASE = 'https://hn.algolia.com/api/v1'; 
 const PATH_SEARCH = '/search'; 
 const PARAM_SEARCH = 'query=';
+const PARAM_PAGE = 'page=';
+const PARAM_HPP = 'hitsPerPage=';
 
 
 function isSearched(searchTerm) { 
@@ -67,14 +71,15 @@ class App extends Component {
     this.setState({ result }); 
   }
 
-  onSearchSubmit() { 
+  onSearchSubmit(page = 0, maxPage = 1) { 
     const { searchTerm } = this.state;
-    fetch(`${PATH_BASE}${PATH_SEARCH}?${PARAM_SEARCH}${searchTerm}`)
-      .then(response => response.json())
-      .then(result => this.setSearchTopStories(result))
-      .catch(error => error);
+    if(page >= 0 && page < maxPage){
+      fetch(`${PATH_BASE}${PATH_SEARCH}?${PARAM_SEARCH}${searchTerm}&${PARAM_PAGE}${page}&${PARAM_HPP}${DEFAULT_HPP}`)
+        .then(response => response.json())
+        .then(result => this.setSearchTopStories(result))
+        .catch(error => error);
+    }
   }
-
 
   componentDidMount() { 
     this.onSearchSubmit();
@@ -83,6 +88,8 @@ class App extends Component {
 
   render() {
     const {searchTerm, result} = this.state;
+    const page = (result && result.page) ? result.page : 0;
+    const maxPage = (result && result.nbPages) ? result.nbPages : -1;
 
     if(!result) { return null; }
 
@@ -92,6 +99,12 @@ class App extends Component {
           {/* <Search onChange={this.SearchValue} /> */}
           <TextSearch onChange={this.SetSearchValue} />
           <Table list={result.hits} pattern={searchTerm} Dismiss={this.Dismiss} />
+        </div>
+        <div className="interactions">
+          <Button onClick={ () => this.onSearchSubmit(0, maxPage)} text=" << " />
+          <Button onClick={ () => this.onSearchSubmit(page - 1, maxPage)} text=" <= " />
+          <Button onClick={ () => this.onSearchSubmit(page + 1, maxPage)} text=" => " />
+          <Button onClick={ () => this.onSearchSubmit(maxPage -1, maxPage)} text=" >> " />
         </div>
       </div>
     );
