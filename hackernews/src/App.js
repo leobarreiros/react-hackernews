@@ -41,25 +41,23 @@ class App extends Component {
   constructor(props) {
     super(props);
 
-    this.state = {result: null, searchTerm: DEFAULT_QUERY};
+    this.state = {results: null, searchKey: '', searchTerm: DEFAULT_QUERY, page:0};
 
     //realizar o bind de cada método com o state, para que outros componentes consigam manipular o state.
     //Sem isso, o this será undefined cada vez que um componente filho receber um destes métodos de um componente pai
     this.Dismiss = this.Dismiss.bind(this);
-    this.SearchValue = this.SearchValue.bind(this);
     this.SetSearchValue = this.SetSearchValue.bind(this);
     this.onSearchSubmit = this.onSearchSubmit.bind(this);
     this.setSearchTopStories = this.setSearchTopStories.bind(this);
   }
 
   Dismiss(itemId){
-    let novaLista = this.state.result.hits.filter((item) => { return item.objectID != itemId});
-    this.setState({result: { ...this.state.result, hits: novaLista}}); //sintaxe para copiar lista
-    //this.setState({result:{hits:novaLista}});
-  }
+    const {searchKey, results, page} = this.state;
+    const {hitsPerPage} = results[searchKey];
 
-  SearchValue(event){
-    this.setState({searchTerm: event.target.value});
+    let pageHits = hitsPerPage.find((item) => item.page == page);
+    pageHits.hits = pageHits.hits.filter((item) => { return item.objectID != itemId});
+    this.setState(this.state);
   }
 
   SetSearchValue(value){
@@ -68,17 +66,40 @@ class App extends Component {
   }
 
   setSearchTopStories(result) { 
-    this.setState({ result }); 
+    const {hits, page, nbPages} = result;
+    const {searchKey, results} = this.state;
+
+    const oldHits = (results && results[searchKey]) ? results[searchKey].hitsPerPage : [];
+    const updatedHits = [...oldHits, ...[{page, hits}]];
+
+    this.setState({
+      results:{
+        ...results, [searchKey] : {hitsPerPage:updatedHits, nbPages}
+      }
+    });
   }
 
   onSearchSubmit(page = 0, maxPage = 1) { 
     const { searchTerm } = this.state;
-    if(page >= 0 && page < maxPage){
-      fetch(`${PATH_BASE}${PATH_SEARCH}?${PARAM_SEARCH}${searchTerm}&${PARAM_PAGE}${page}&${PARAM_HPP}${DEFAULT_HPP}`)
-        .then(response => response.json())
-        .then(result => this.setSearchTopStories(result))
-        .catch(error => error);
+    const cache = this.getCachePage(page, searchTerm);
+    
+    if(page >= 0 && page < maxPage) {
+      this.setState({page: page, searchKey:searchTerm});
+      if(!cache || (cache.length == 0)){
+        fetch(`${PATH_BASE}${PATH_SEARCH}?${PARAM_SEARCH}${searchTerm}&${PARAM_PAGE}${page}&${PARAM_HPP}${DEFAULT_HPP}`)
+          .then(response => response.json())
+          .then(result => this.setSearchTopStories(result))
+          .catch(error => error);
+      }
     }
+  }
+
+  getCachePage(page, key){
+    const posicao = page * DEFAULT_HPP;
+    const cache = this.state.results && this.state.results[key] && this.state.results[key].hitsPerPage &&
+      this.state.results[key].hitsPerPage.find((item) => { return item.page == page });
+    
+    return cache && cache.hits;
   }
 
   componentDidMount() { 
@@ -87,18 +108,18 @@ class App extends Component {
 
 
   render() {
-    const {searchTerm, result} = this.state;
-    const page = (result && result.page) ? result.page : 0;
-    const maxPage = (result && result.nbPages) ? result.nbPages : -1;
+    const {searchTerm, results, searchKey, page} = this.state;
+    const maxPage = (results && results[searchKey] && results[searchKey].nbPages) || -1;
+    const hits = (results && results[searchKey] && results[searchKey].hits) || [];
+    const posicao = page * DEFAULT_HPP;
 
-    if(!result) { return null; }
+    if(!results) { return null; }
 
     return (
       <div className="page">
         <div className="interactions"> 
-          {/* <Search onChange={this.SearchValue} /> */}
           <TextSearch onChange={this.SetSearchValue} />
-          <Table list={result.hits} pattern={searchTerm} Dismiss={this.Dismiss} />
+          <Table list={this.getCachePage(page,searchKey)} pattern={searchTerm} Dismiss={this.Dismiss} />
         </div>
         <div className="interactions">
           <Button onClick={ () => this.onSearchSubmit(0, maxPage)} text=" << " />
@@ -162,16 +183,6 @@ class TextSearch extends Component {
       );
   }
 }
-
-// Componentes que não herdam de Component não possuem acesso ao state e são considerados stateless components
-// function Search({onChange, text}){
-//   return (
-//     <form>
-//         <span>{text} </span>
-//         <input type="text" onChange={onChange} />
-//       </form>    
-//   );
-// }
 
 const Table = ({ list, pattern, Dismiss }) =>
   <div className="table">
