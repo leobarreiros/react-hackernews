@@ -1,0 +1,5 @@
+1. gerar um build do projeto (npm run build)
+2. na pasta root do projeto executar:
+
+docker build . -t nome-da-imagem-container
+docker run -p 8000:80 nome-da-imagem-container
